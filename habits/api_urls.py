@@ -1,9 +1,13 @@
+
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from habits.api.views import PlaceViewSet, HabitViewSet
+from habits.views import PlaceViewSet, HabitViewSet, PublicHabitListAPIView
 
 router = DefaultRouter()
 router.register(r"places", PlaceViewSet, basename="place")
 router.register(r"habits", HabitViewSet, basename="habit")
 
-urlpatterns = router.urls
+uurlpatterns = router.urls + [
+    path("habits/public/", PublicHabitListAPIView.as_view(), name="public-habits"),
+]

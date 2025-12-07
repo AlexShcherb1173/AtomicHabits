@@ -4,11 +4,16 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from .validators import (
+    validate_duration_max_120_seconds,
+    validate_periodicity_1_to_7_days,
+)
+
 
 class Place(models.Model):
     """
     Справочник мест, где выполняются привычки.
-    Например: "дом", "офис", "спортзал", "парк".
+    Например: дом, офис, спортзал, парк.
     """
 
     name = models.CharField(
@@ -28,7 +33,7 @@ class Place(models.Model):
         verbose_name_plural = "список мест"
         ordering = ("name",)
 
-    def __str__(self) -> str:
+    def __str__(self):
         return self.name
 
 
@@ -36,12 +41,12 @@ class Habit(models.Model):
     """
     Привычка по книге Джеймса Клира.
 
-    Важные моменты:
-    - Пользователь — создатель привычки.
-    - Место — FK на справочник Place.
-    - Признак приятной привычки (is_pleasant) — булево поле.
-    - Связанная привычка — FK на саму себя, обычно приятная.
-    - Вознаграждение и связанная привычка ВЗАИМОИСКЛЮЧАЮЩИЕ.
+    Правила:
+    - Нельзя одновременно указать reward и related_habit.
+    - В связанные привычки могут попадать только приятные (is_pleasant=True).
+    - У приятной привычки (is_pleasant=True) не может быть reward и related_habit.
+    - Периодичность: от 1 до 7 дней.
+    - Время выполнения: > 0 и ≤ 120 секунд.
     """
 
     user = models.ForeignKey(
@@ -49,7 +54,6 @@ class Habit(models.Model):
         on_delete=models.CASCADE,
         related_name="habits",
         verbose_name="пользователь",
-        help_text="Пользователь, создавший привычку.",
     )
 
     place = models.ForeignKey(
@@ -59,7 +63,7 @@ class Habit(models.Model):
         blank=True,
         related_name="habits",
         verbose_name="место",
-        help_text="Место, где выполняется привычка. Можно оставить пустым — 'где бы то ни было'.",
+        help_text="Место, где выполняется привычка. Можно оставить пустым.",
     )
 
     time = models.TimeField(
@@ -70,16 +74,13 @@ class Habit(models.Model):
     action = models.CharField(
         max_length=255,
         verbose_name="действие",
-        help_text="Что именно вы будете делать (например: пить воду, гулять и т.п.).",
+        help_text="Что именно нужно делать: пить воду, гулять, медитировать и т.д.",
     )
 
     is_pleasant = models.BooleanField(
         default=False,
         verbose_name="приятная привычка",
-        help_text=(
-            "Если включено — привычка является приятной (используется как награда), "
-            "а не полезной."
-        ),
+        help_text="Отметьте, если эта привычка является приятной (используется как награда).",
     )
 
     related_habit = models.ForeignKey(
@@ -89,97 +90,94 @@ class Habit(models.Model):
         blank=True,
         related_name="reward_for",
         verbose_name="связанная привычка",
-        help_text=(
-            "Приятная привычка, которая является наградой за выполнение этой привычки. "
-            "Используется для полезных привычек."
-        ),
+        help_text="Приятная привычка, являющаяся наградой.",
         limit_choices_to={"is_pleasant": True},
     )
 
     periodicity = models.PositiveSmallIntegerField(
         default=1,
         verbose_name="периодичность (дни)",
-        help_text="Как часто выполнять привычку в днях (по умолчанию — каждый день).",
+        help_text=(
+            "Как часто выполнять привычку (в днях). "
+            "Допустимо от 1 до 7 (не реже, чем раз в неделю)."
+        ),
+        validators=[validate_periodicity_1_to_7_days],
     )
 
     reward = models.CharField(
         max_length=255,
         verbose_name="вознаграждение",
         blank=True,
-        help_text=(
-            "Чем вы вознаградите себя после выполнения привычки "
-            "(если не используете связанную приятную привычку)."
-        ),
+        help_text="Вознаграждение, если НЕ используется приятная привычка.",
     )
 
     duration = models.DurationField(
         verbose_name="время на выполнение",
-        default=datetime.timedelta(minutes=5),
-        help_text="Примерное время, которое требуется для выполнения привычки.",
+        default=datetime.timedelta(seconds=60),
+        help_text="Сколько времени требуется на выполнение привычки.",
+        validators=[validate_duration_max_120_seconds],
     )
 
     is_public = models.BooleanField(
         default=False,
         verbose_name="публичная привычка",
-        help_text=(
-            "Если включено — привычка публикуется в общий доступ, "
-            "чтобы другие пользователи могли брать её в пример."
-        ),
+        help_text="Показывать ли привычку другим пользователям.",
     )
 
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="создана",
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name="обновлена",
-    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="создана")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="обновлена")
 
     class Meta:
         verbose_name = "привычка"
         verbose_name_plural = "привычки"
         ordering = ("-created_at",)
 
-    # === Бизнес-логика ===
+    # -------------------------
+    #  БИЗНЕС-ВАЛИДАЦИЯ
+    # -------------------------
 
     def clean(self):
-        """
-        Валидация бизнес-правил:
-
-        1. reward и related_habit взаимно исключаются.
-        2. Если указана related_habit, она должна быть приятной.
-        3. periodicity >= 1.
-        """
         errors = {}
 
-        # 1. Взаимоисключаемость reward и related_habit
-        if self.reward and self.related_habit is not None:
+        # 1) Исключить одновременный выбор связанной привычки и вознаграждения
+        if self.reward and self.related_habit:
             msg = "Нельзя одновременно указывать вознаграждение и связанную привычку."
             errors["reward"] = msg
             errors["related_habit"] = msg
 
-        # 2. Связанная привычка должна быть приятной
+        # 2) В связанные привычки могут попадать только приятные привычки
         if self.related_habit and not self.related_habit.is_pleasant:
-            errors["related_habit"] = "Связанная привычка должна быть отмечена как приятная."
+            errors["related_habit"] = (
+                "В связанные привычки могут попадать только привычки "
+                "с признаком приятной привычки."
+            )
 
-        # 3. Ограничение периодичности
-        if self.periodicity < 1:
-            errors["periodicity"] = "Периодичность должна быть минимум 1 день."
+        # 3) У приятной привычки не может быть вознаграждения или связанной привычки
+        if self.is_pleasant:
+            if self.reward:
+                errors["reward"] = (
+                    "У приятной привычки не может быть вознаграждения."
+                )
+            if self.related_habit:
+                errors["related_habit"] = (
+                    "У приятной привычки не может быть связанной привычки."
+                )
+
+        # validators уже проверяют duration и periodicity,
+        # но можно подстраховаться/дополнить логику при необходимости.
 
         if errors:
             raise ValidationError(errors)
 
+    # -------------------------
+    #  ДИНАМИЧЕСКОЕ НАЗВАНИЕ
+    # -------------------------
+
     @property
     def title(self) -> str:
+        """Генерирует текст вида:
+        «Я буду пить воду ежедневно в 12:00 в офисе»
         """
-        Динамическое «название» привычки:
-
-        «Я буду пить воду ежедневно в 12:00, где бы то ни было»
-        или
-        «Я буду гулять каждый день в 19:00 в парке».
-        """
-        # периодичность → текст
         if self.periodicity == 1:
             freq = "ежедневно"
         elif self.periodicity == 7:
@@ -187,7 +185,7 @@ class Habit(models.Model):
         else:
             freq = f"каждые {self.periodicity} дней"
 
-        time_str = self.time.strftime("%H:%M") if self.time else "в удобное время"
+        time_str = self.time.strftime("%H:%M")
 
         if self.place:
             place_str = f"в {self.place.name}"
@@ -196,5 +194,5 @@ class Habit(models.Model):
 
         return f"Я буду {self.action.lower()} {freq} в {time_str} {place_str}"
 
-    def __str__(self) -> str:
+    def __str__(self):
         return self.title
