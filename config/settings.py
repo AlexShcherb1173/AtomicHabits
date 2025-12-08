@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "habits",
     "accounts",
     "users",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -132,3 +133,16 @@ EMAIL_PORT = int(os.getenv('SMTP_PORT', '587'))
 EMAIL_USE_TLS = os.getenv('SMTP_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('SMTP_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('SMTP_PASSWORD', '')
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_API_URL = os.getenv("TELEGRAM_API_URL", "https://api.telegram.org")
+
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/1"
+
+CELERY_BEAT_SCHEDULE = {
+    "send-habit-reminders-every-minute": {
+        "task": "habits.tasks.send_habit_reminders",
+        "schedule": 60.0,  # каждые 60 секунд проверяем, кому напомнить
+    },
+}
