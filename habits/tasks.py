@@ -17,7 +17,6 @@ def send_habit_reminders():
     now = timezone.localtime()
     current_time = now.time().replace(second=0, microsecond=0)
 
-    # Найдём все привычки на это время (без учёта periodicity по дате — базовый вариант)
     habits = Habit.objects.filter(time=current_time)
 
     for habit in habits:

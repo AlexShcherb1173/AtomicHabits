@@ -13,7 +13,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-load_dotenv()# Build paths inside the project like this: BASE_DIR / 'subdir'.
+from celery.schedules import crontab
+
+load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -135,14 +137,17 @@ EMAIL_HOST_USER = os.getenv('SMTP_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_API_URL = os.getenv("TELEGRAM_API_URL", "https://api.telegram.org")
 
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
 CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/1"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = False
 
 CELERY_BEAT_SCHEDULE = {
     "send-habit-reminders-every-minute": {
         "task": "habits.tasks.send_habit_reminders",
-        "schedule": 60.0,  # каждые 60 секунд проверяем, кому напомнить
+        "schedule": crontab(),  # каждые 60 секунд проверяем, кому напомнить
     },
 }
