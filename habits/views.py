@@ -1,43 +1,49 @@
-from django.db.models import Q
-from rest_framework import viewsets, permissions, generics
-from rest_framework.pagination import PageNumberPagination
+"""
+API views для приложения habits.
+Содержит:
+- PlaceViewSet: CRUD по справочнику мест (требует авторизацию).
+- HabitViewSet: CRUD по привычкам текущего пользователя (только свои привычки).
+- PublicHabitListAPIView: публичный read-only список привычек (доступен без авторизации).
+ТЗ по доступу:
+- Каждый пользователь имеет CRUD доступ только к своим привычкам.
+- Публичные привычки доступны всем только на просмотр через отдельный endpoint.
+"""
 
-from habits.models import Place, Habit
-from .serializers import PlaceSerializer, HabitSerializer
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import generics, permissions, viewsets
 
-
-class HabitPagination(PageNumberPagination):
-    """
-    Пагинация для списка привычек: по 5 штук на страницу.
-    GET /api/habits/?page=2
-    """
-    page_size = 5
-    page_size_query_param = "page_size"
-    max_page_size = 100
+from habits.models import Habit, Place
+from habits.pagination import HabitPagination
+from habits.serializers import HabitSerializer, PlaceSerializer
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """
-    Права доступа к отдельной привычке (object-level permission):
-    - Для безопасных методов (GET/HEAD/OPTIONS) доступ разрешён всем
-      аутентифицированным пользователям, если объект попал в queryset.
-    - Для небезопасных (PUT/PATCH/DELETE) — только если obj.user == request.user.
-
-    Таким образом:
-    - редактировать/удалять можно ТОЛЬКО свои привычки;
-    - чужие публичные привычки доступны только для чтения.
+    Object-level permission: редактировать/удалять объект может только владелец.
+    Примечание:
+    Для SAFE методов (GET/HEAD/OPTIONS) разрешаем доступ,
+    но реальная видимость объектов контролируется queryset'ом.
     """
 
-    def has_object_permission(self, request, view, obj):
+    def has_object_permission(self, request, view, obj) -> bool:
         if request.method in permissions.SAFE_METHODS:
             return True
-        return obj.user == request.user
+        return getattr(obj, "user_id", None) == getattr(request.user, "id", None)
 
 
+@extend_schema_view(
+    list=extend_schema(tags=["Habits"], summary="Список мест"),
+    retrieve=extend_schema(tags=["Habits"], summary="Получить место"),
+    create=extend_schema(tags=["Habits"], summary="Создать место"),
+    update=extend_schema(tags=["Habits"], summary="Обновить место"),
+    partial_update=extend_schema(tags=["Habits"], summary="Частично обновить место"),
+    destroy=extend_schema(tags=["Habits"], summary="Удалить место"),
+)
 class PlaceViewSet(viewsets.ModelViewSet):
     """
-    CRUD API для справочника мест.
-    Пока доступен только аутентифицированным пользователям.
+    CRUD API для справочника мест (Place).
+    Сейчас доступ ограничен авторизованными пользователями.
+    Если нужно — можно ужесточить до admin/staff.
     """
 
     queryset = Place.objects.all()
@@ -45,16 +51,21 @@ class PlaceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
 
+@extend_schema_view(
+    list=extend_schema(tags=["Habits"], summary="Список моих привычек (с пагинацией)"),
+    retrieve=extend_schema(tags=["Habits"], summary="Получить мою привычку"),
+    create=extend_schema(tags=["Habits"], summary="Создать привычку"),
+    update=extend_schema(tags=["Habits"], summary="Обновить привычку"),
+    partial_update=extend_schema(tags=["Habits"], summary="Частично обновить привычку"),
+    destroy=extend_schema(tags=["Habits"], summary="Удалить привычку"),
+)
 class HabitViewSet(viewsets.ModelViewSet):
     """
-    CRUD API для привычек.
-
-    Правила доступа:
-    - Любой аутентифицированный пользователь:
-        * видит ВСЕ свои привычки (публичные и непубличные),
-        * видит публичные привычки других пользователей,
-        * НЕ может редактировать или удалять чужие привычки.
-    - CRUD (create, update, delete) фактически только над собственными привычками.
+    CRUD API для привычек текущего пользователя.
+    По ТЗ:
+    - пользователь может создавать/читать/редактировать/удалять ТОЛЬКО свои привычки;
+    - публичные привычки других пользователей доступны только через отдельный endpoint:
+      GET /api/habits/public/ (read-only).
     """
 
     serializer_class = HabitSerializer
@@ -62,36 +73,46 @@ class HabitViewSet(viewsets.ModelViewSet):
     pagination_class = HabitPagination
 
     def get_queryset(self):
+        """
+        Возвращает queryset только с привычками текущего пользователя.
+        Это обеспечивает:
+        - список /api/habits/ содержит только мои привычки;
+        - retrieve /api/habits/{id}/ не отдаст чужой объект (будет 404).
+        """
         user = self.request.user
-
-        # list / retrieve:
-        #   - свои привычки (любые)
-        #   - чужие только с is_public=True
-        if self.action in ("list", "retrieve"):
-            return (
-                Habit.objects.filter(Q(user=user) | Q(is_public=True))
-                .select_related("user", "place", "related_habit")
-            )
-
-        # create / update / partial_update / destroy:
-        #   - работаем только со своими привычками
-        return Habit.objects.filter(user=user).select_related(
-            "user", "place", "related_habit"
-        )
+        return Habit.objects.filter(user=user).select_related("user", "place", "related_habit")
 
     def perform_create(self, serializer):
-        # user приезжает из request, другие пользователи не могут подложить чужой id
+        """
+        На всякий случай принудительно привязываем привычку к request.user,
+        чтобы клиент не мог подложить чужого пользователя.
+        """
         serializer.save(user=self.request.user)
 
+
+@extend_schema(
+    summary="Список публичных привычек",
+    description="Публичные привычки доступны без авторизации (только чтение).",
+    tags=["Habits"],
+    auth=[],
+)
 class PublicHabitListAPIView(generics.ListAPIView):
     """
-    Список публичных привычек.
-    GET /api/habits/public/
+    Public read-only endpoint для публичных привычек.
+    Endpoint:
+    - GET /api/habits/public/
+    Особенности:
+    - доступен анонимно;
+    - возвращает только Habit.is_public=True;
+    - пагинация: 5 объектов на страницу.
     """
 
-    queryset = Habit.objects.filter(is_public=True).select_related(
-        "user", "place", "related_habit"
-    )
     serializer_class = HabitSerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = HabitPagination
+
+    def get_queryset(self):
+        """
+        Публичные привычки (без авторизации).
+        """
+        return Habit.objects.filter(is_public=True).select_related("user", "place", "related_habit")

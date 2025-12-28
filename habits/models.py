@@ -1,3 +1,16 @@
+"""
+Модели приложения habits.
+Содержит:
+- Place: справочник мест выполнения привычек.
+- Habit: привычка пользователя по ТЗ проекта AtomicHabits.
+Важные бизнес-правила (по ТЗ) реализованы в Habit.clean():
+1) Нельзя одновременно указывать reward и related_habit.
+2) Время выполнения должно быть > 0 и <= 120 секунд (если задано).
+3) Связанная привычка (related_habit) может быть только pleasant (is_pleasant=True).
+4) У pleasant-привычки не может быть reward или related_habit.
+5) Periodicity (периодичность) — от 1 до 7 дней включительно.
+"""
+
 import datetime
 
 from django.conf import settings
@@ -13,7 +26,11 @@ from .validators import (
 class Place(models.Model):
     """
     Справочник мест, где выполняются привычки.
-    Например: дом, офис, спортзал, парк.
+    Примеры:
+    - дом
+    - офис
+    - спортзал
+    - парк
     """
 
     name = models.CharField(
@@ -33,20 +50,22 @@ class Place(models.Model):
         verbose_name_plural = "список мест"
         ordering = ("name",)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
 class Habit(models.Model):
     """
-    Привычка по книге Джеймса Клира.
+    Привычка по книге Джеймса Клира (AtomicHabits).
+    Полезная привычка:
+    - is_pleasant=False
+    - может иметь reward ИЛИ related_habit (pleasant-награду)
 
-    Правила:
-    - Нельзя одновременно указать reward и related_habit.
-    - В связанные привычки могут попадать только приятные (is_pleasant=True).
-    - У приятной привычки (is_pleasant=True) не может быть reward и related_habit.
-    - Периодичность: от 1 до 7 дней.
-    - Время выполнения: > 0 и ≤ 120 секунд.
+    Приятная привычка (награда):
+    - is_pleasant=True
+    - не может иметь reward
+    - не может иметь related_habit
+    См. метод clean() — там реализованы все правила ТЗ.
     """
 
     user = models.ForeignKey(
@@ -114,7 +133,9 @@ class Habit(models.Model):
     duration = models.DurationField(
         verbose_name="время на выполнение",
         default=datetime.timedelta(seconds=60),
-        help_text="Сколько времени требуется на выполнение привычки.",
+        null=True,
+        blank=True,
+        help_text="Сколько времени требуется на выполнение привычки (максимум 120 секунд).",
         validators=[validate_duration_max_120_seconds],
     )
 
@@ -132,50 +153,54 @@ class Habit(models.Model):
         verbose_name_plural = "привычки"
         ordering = ("-created_at",)
 
-    # -------------------------
-    #  БИЗНЕС-ВАЛИДАЦИЯ
-    # -------------------------
+    def clean(self) -> None:
+        """
+        Валидирует бизнес-правила (по ТЗ).
+        Ошибки возвращаются как словарь по полям, чтобы DRF/админка
+        показывали их корректно.
+        """
+        errors: dict[str, str] = {}
 
-    def clean(self):
-        errors = {}
-
-        # 1) Исключить одновременный выбор связанной привычки и вознаграждения
-        if self.reward and self.related_habit:
+        # 1) reward и related_habit взаимоисключающие
+        if self.reward and self.related_habit is not None:
             msg = "Нельзя одновременно указывать вознаграждение и связанную привычку."
             errors["reward"] = msg
             errors["related_habit"] = msg
 
-        # 2) В связанные привычки могут попадать только приятные привычки
-        if self.related_habit and not self.related_habit.is_pleasant:
-            errors["related_habit"] = (
-                "В связанные привычки могут попадать только привычки "
-                "с признаком приятной привычки."
-            )
-
-        # 3) У приятной привычки не может быть вознаграждения или связанной привычки
+        # 4) pleasant-привычка не может иметь reward или related_habit
         if self.is_pleasant:
             if self.reward:
-                errors["reward"] = (
-                    "У приятной привычки не может быть вознаграждения."
-                )
-            if self.related_habit:
-                errors["related_habit"] = (
-                    "У приятной привычки не может быть связанной привычки."
-                )
+                errors["reward"] = "У приятной привычки не может быть вознаграждения."
+            if self.related_habit is not None:
+                errors["related_habit"] = "У приятной привычки не может быть связанной привычки."
 
-        # validators уже проверяют duration и periodicity,
-        # но можно подстраховаться/дополнить логику при необходимости.
+        # 3) related_habit может быть только pleasant
+        if self.related_habit and not self.related_habit.is_pleasant:
+            errors["related_habit"] = "Связанная привычка должна быть отмечена как приятная."
+
+        # 5) periodicity: 1..7
+        if self.periodicity < 1:
+            errors["periodicity"] = "Периодичность должна быть минимум 1 день."
+        elif self.periodicity > 7:
+            errors["periodicity"] = "Нельзя выполнять привычку реже, чем 1 раз в 7 дней."
+
+        # 2) duration: > 0 и <= 120 секунд (если задано)
+        if self.duration is not None:
+            if self.duration <= datetime.timedelta(0):
+                errors["duration"] = "Время на выполнение должно быть больше нуля."
+            elif self.duration > datetime.timedelta(seconds=120):
+                errors["duration"] = "Время на выполнение не должно превышать 120 секунд."
 
         if errors:
             raise ValidationError(errors)
 
-    # -------------------------
-    #  ДИНАМИЧЕСКОЕ НАЗВАНИЕ
-    # -------------------------
+        super().clean()
 
     @property
     def title(self) -> str:
-        """Генерирует текст вида:
+        """
+        Динамическое «название» привычки.
+        Пример:
         «Я буду пить воду ежедневно в 12:00 в офисе»
         """
         if self.periodicity == 1:
@@ -187,12 +212,19 @@ class Habit(models.Model):
 
         time_str = self.time.strftime("%H:%M")
 
-        if self.place:
-            place_str = f"в {self.place.name}"
-        else:
-            place_str = "где бы то ни было"
+        place_str = f"в {self.place.name}" if self.place else "где бы то ни было"
 
         return f"Я буду {self.action.lower()} {freq} в {time_str} {place_str}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.title
+
+    def save(self, *args, **kwargs):
+        """
+        Сохраняет модель с обязательной проверкой бизнес-правил.
+        full_clean() гарантирует вызов:
+        - field validators (validators=...)
+        - clean()
+        """
+        self.full_clean()
+        return super().save(*args, **kwargs)

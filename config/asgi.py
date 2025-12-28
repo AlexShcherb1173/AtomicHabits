@@ -1,16 +1,20 @@
 """
-ASGI config for config project.
+ASGI конфигурация проекта AtomicHabits.
+Используется для:
+- асинхронных серверов (Uvicorn, Daphne, Hypercorn)
+- WebSocket (в будущем, при необходимости)
+- масштабируемых production-развёртываний
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
+Подробнее:
+https://docs.djangoproject.com/en/stable/howto/deployment/asgi/
 """
 
 import os
 
 from django.core.asgi import get_asgi_application
 
+# Устанавливаем настройки Django по умолчанию для ASGI-серверов
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
+# ASGI-приложение, которое будет использовать сервер
 application = get_asgi_application()

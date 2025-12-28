@@ -1,0 +1,11 @@
+﻿[tool.black]
+line-length = 88
+target-version = ["py312","py313"]
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "-q"
