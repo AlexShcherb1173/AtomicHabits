@@ -1,39 +1,55 @@
-import pytest
-from django.contrib.auth import get_user_model
-from rest_framework.authtoken.models import Token
-from rest_framework.test import APIClient
+"""
+Глобальные pytest-фикстуры для проекта AtomicHabits.
 
-User = get_user_model()
+Важно:
+- conftest.py импортируется pytest ДО инициализации Django.
+- Поэтому любые импорты Django/DRF (get_user_model, APIClient, Token и т.д.)
+  делаем только ВНУТРИ фикстур.
+"""
+
+import pytest
 
 
 @pytest.fixture
 def api_client():
+    """
+    Неаутентифицированный DRF APIClient.
+    Импорт DRF выполняем внутри фикстуры, когда Django уже поднят pytest-django.
+    """
+    from rest_framework.test import APIClient
+
     return APIClient()
 
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(username="alex", password="password123")
+    """
+    Тестовый пользователь.
+    """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    return User.objects.create_user(username="test_user", password="test_password")
 
 
 @pytest.fixture
 def user2(db):
-    return User.objects.create_user(username="bob", password="password123")
+    """
+    Второй тестовый пользователь (для проверки прав доступа, чужих привычек и т.п.).
+    """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    return User.objects.create_user(username="user2", password="test_password")
 
 
 @pytest.fixture
-def token(user):
-    return Token.objects.get_or_create(user=user)[0]
+def auth_client(api_client, user):
+    """
+    DRF-клиент с Token-аутентификацией под user.
+    """
+    from rest_framework.authtoken.models import Token
 
-
-@pytest.fixture
-def auth_client(api_client, token):
+    token, _ = Token.objects.get_or_create(user=user)
     api_client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
-    return api_client
-
-
-@pytest.fixture
-def auth_client_user2(api_client, user2):
-    token2 = Token.objects.get_or_create(user=user2)[0]
-    api_client.credentials(HTTP_AUTHORIZATION=f"Token {token2.key}")
     return api_client
