@@ -25,7 +25,6 @@ urlpatterns = [
         PublicHabitListAPIView.as_view(),
         name="public-habits",
     ),
-
     # Все стандартные CRUD-эндпоинты от ViewSet’ов:
     # - /places/
     # - /habits/

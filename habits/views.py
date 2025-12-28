@@ -80,7 +80,9 @@ class HabitViewSet(viewsets.ModelViewSet):
         - retrieve /api/habits/{id}/ не отдаст чужой объект (будет 404).
         """
         user = self.request.user
-        return Habit.objects.filter(user=user).select_related("user", "place", "related_habit")
+        return Habit.objects.filter(user=user).select_related(
+            "user", "place", "related_habit"
+        )
 
     def perform_create(self, serializer):
         """
@@ -115,4 +117,6 @@ class PublicHabitListAPIView(generics.ListAPIView):
         """
         Публичные привычки (без авторизации).
         """
-        return Habit.objects.filter(is_public=True).select_related("user", "place", "related_habit")
+        return Habit.objects.filter(is_public=True).select_related(
+            "user", "place", "related_habit"
+        )

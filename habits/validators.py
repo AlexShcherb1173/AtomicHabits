@@ -24,14 +24,10 @@ def validate_duration_max_120_seconds(value: datetime.timedelta | None) -> None:
         return
 
     if value <= datetime.timedelta(0):
-        raise ValidationError(
-            _("Время на выполнение должно быть больше нуля.")
-        )
+        raise ValidationError(_("Время на выполнение должно быть больше нуля."))
 
     if value > datetime.timedelta(seconds=120):
-        raise ValidationError(
-            _("Время на выполнение не должно превышать 120 секунд.")
-        )
+        raise ValidationError(_("Время на выполнение не должно превышать 120 секунд."))
 
 
 def validate_periodicity_1_to_7_days(value: int) -> None:
@@ -44,11 +40,7 @@ def validate_periodicity_1_to_7_days(value: int) -> None:
     Используется в поле Habit.periodicity.
     """
     if value < 1:
-        raise ValidationError(
-            _("Периодичность должна быть минимум 1 день.")
-        )
+        raise ValidationError(_("Периодичность должна быть минимум 1 день."))
 
     if value > 7:
-        raise ValidationError(
-            _("Нельзя выполнять привычку реже, чем 1 раз в 7 дней.")
-        )
+        raise ValidationError(_("Нельзя выполнять привычку реже, чем 1 раз в 7 дней."))

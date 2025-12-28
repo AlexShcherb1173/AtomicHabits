@@ -42,9 +42,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         Проверяет совпадение паролей.
         """
         if attrs["password"] != attrs["password2"]:
-            raise serializers.ValidationError(
-                {"password": "Пароли не совпадают."}
-            )
+            raise serializers.ValidationError({"password": "Пароли не совпадают."})
         return attrs
 
     def create(self, validated_data):
@@ -88,9 +86,7 @@ class LoginSerializer(serializers.Serializer):
             password=attrs["password"],
         )
         if not user:
-            raise serializers.ValidationError(
-                "Неверный логин или пароль."
-            )
+            raise serializers.ValidationError("Неверный логин или пароль.")
 
         attrs["user"] = user
         return attrs

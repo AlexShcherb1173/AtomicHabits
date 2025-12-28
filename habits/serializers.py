@@ -72,7 +72,9 @@ class HabitSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Время на выполнение обязательно.")
 
         if value <= timedelta(0):
-            raise serializers.ValidationError("Время на выполнение должно быть больше нуля.")
+            raise serializers.ValidationError(
+                "Время на выполнение должно быть больше нуля."
+            )
         if value > timedelta(seconds=120):
             raise serializers.ValidationError(
                 "Время на выполнение не должно превышать 120 секунд."
@@ -87,9 +89,13 @@ class HabitSerializer(serializers.ModelSerializer):
         - периодичность допустима от 1 до 7 включительно.
         """
         if value < 1:
-            raise serializers.ValidationError("Периодичность должна быть минимум 1 день.")
+            raise serializers.ValidationError(
+                "Периодичность должна быть минимум 1 день."
+            )
         if value > 7:
-            raise serializers.ValidationError("Нельзя выполнять привычку реже, чем 1 раз в 7 дней.")
+            raise serializers.ValidationError(
+                "Нельзя выполнять привычку реже, чем 1 раз в 7 дней."
+            )
         return value
 
     def validate(self, attrs: dict) -> dict:
@@ -100,7 +106,9 @@ class HabitSerializer(serializers.ModelSerializer):
         instance: Habit | None = getattr(self, "instance", None)
 
         reward = attrs.get("reward", getattr(instance, "reward", ""))
-        related_habit = attrs.get("related_habit", getattr(instance, "related_habit", None))
+        related_habit = attrs.get(
+            "related_habit", getattr(instance, "related_habit", None)
+        )
         is_pleasant = attrs.get("is_pleasant", getattr(instance, "is_pleasant", False))
 
         errors: dict[str, str] = {}
@@ -113,14 +121,18 @@ class HabitSerializer(serializers.ModelSerializer):
 
         # 2) related_habit должен быть pleasant
         if related_habit is not None and not related_habit.is_pleasant:
-            errors["related_habit"] = "Связанная привычка должна быть отмечена как приятная."
+            errors["related_habit"] = (
+                "Связанная привычка должна быть отмечена как приятная."
+            )
 
         # 3) pleasant-привычка не может иметь reward или related_habit
         if is_pleasant:
             if reward:
                 errors["reward"] = "У приятной привычки не может быть вознаграждения."
             if related_habit is not None:
-                errors["related_habit"] = "У приятной привычки не может быть связанной привычки."
+                errors["related_habit"] = (
+                    "У приятной привычки не может быть связанной привычки."
+                )
 
         if errors:
             raise serializers.ValidationError(errors)

@@ -15,17 +15,54 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='TelegramProfile',
+            name="TelegramProfile",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('chat_id', models.CharField(help_text='Идентификатор чата, куда слать уведомления.', max_length=64, unique=True, verbose_name='Telegram chat ID')),
-                ('username', models.CharField(blank=True, help_text='@username в Telegram (по желанию).', max_length=255, verbose_name='Telegram username')),
-                ('is_active', models.BooleanField(default=True, verbose_name='получать уведомления')),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='telegram_profile', to=settings.AUTH_USER_MODEL, verbose_name='пользователь')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "chat_id",
+                    models.CharField(
+                        help_text="Идентификатор чата, куда слать уведомления.",
+                        max_length=64,
+                        unique=True,
+                        verbose_name="Telegram chat ID",
+                    ),
+                ),
+                (
+                    "username",
+                    models.CharField(
+                        blank=True,
+                        help_text="@username в Telegram (по желанию).",
+                        max_length=255,
+                        verbose_name="Telegram username",
+                    ),
+                ),
+                (
+                    "is_active",
+                    models.BooleanField(
+                        default=True, verbose_name="получать уведомления"
+                    ),
+                ),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="telegram_profile",
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name="пользователь",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Telegram-профиль',
-                'verbose_name_plural': 'Telegram-профили',
+                "verbose_name": "Telegram-профиль",
+                "verbose_name_plural": "Telegram-профили",
             },
         ),
     ]

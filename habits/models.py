@@ -172,24 +172,32 @@ class Habit(models.Model):
             if self.reward:
                 errors["reward"] = "У приятной привычки не может быть вознаграждения."
             if self.related_habit is not None:
-                errors["related_habit"] = "У приятной привычки не может быть связанной привычки."
+                errors["related_habit"] = (
+                    "У приятной привычки не может быть связанной привычки."
+                )
 
         # 3) related_habit может быть только pleasant
         if self.related_habit and not self.related_habit.is_pleasant:
-            errors["related_habit"] = "Связанная привычка должна быть отмечена как приятная."
+            errors["related_habit"] = (
+                "Связанная привычка должна быть отмечена как приятная."
+            )
 
         # 5) periodicity: 1..7
         if self.periodicity < 1:
             errors["periodicity"] = "Периодичность должна быть минимум 1 день."
         elif self.periodicity > 7:
-            errors["periodicity"] = "Нельзя выполнять привычку реже, чем 1 раз в 7 дней."
+            errors["periodicity"] = (
+                "Нельзя выполнять привычку реже, чем 1 раз в 7 дней."
+            )
 
         # 2) duration: > 0 и <= 120 секунд (если задано)
         if self.duration is not None:
             if self.duration <= datetime.timedelta(0):
                 errors["duration"] = "Время на выполнение должно быть больше нуля."
             elif self.duration > datetime.timedelta(seconds=120):
-                errors["duration"] = "Время на выполнение не должно превышать 120 секунд."
+                errors["duration"] = (
+                    "Время на выполнение не должно превышать 120 секунд."
+                )
 
         if errors:
             raise ValidationError(errors)

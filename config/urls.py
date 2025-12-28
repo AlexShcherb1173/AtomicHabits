@@ -23,38 +23,32 @@ urlpatterns = [
     # Admin
     # ============================================================
     path("admin/", admin.site.urls),
-
     # ============================================================
     # Auth API
     # ============================================================
     # Регистрация и получение токена
     path("api/auth/", include("accounts.api_urls")),
-
     # ============================================================
     # Habits API
     # ============================================================
     # CRUD привычек, мест + публичные привычки
     path("api/", include("habits.api_urls")),
-
     # ============================================================
     # Notifications API
     # ============================================================
     # Telegram-интеграция (привязка аккаунта)
     path("api/", include("notifications.api_urls")),
-
     # ============================================================
     # OpenAPI / Swagger
     # ============================================================
     # Машинно-читаемая OpenAPI схема
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-
     # Swagger UI
     path(
         "api/docs/",
         SpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui",
     ),
-
     # Redoc UI
     path(
         "api/redoc/",
@@ -62,4 +56,3 @@ urlpatterns = [
         name="redoc",
     ),
 ]
-

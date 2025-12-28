@@ -67,4 +67,3 @@ def test_send_habit_reminders_calls_send_telegram_message(user):
         assert called_chat_id == "777000"
         assert habit.title in called_text
         assert "Напоминание о привычке" in called_text
-        

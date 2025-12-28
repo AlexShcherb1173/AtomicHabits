@@ -132,7 +132,9 @@ def handle_start(chat_id: str | int, text: str, username: Optional[str] = None) 
     )
 
 
-def _extract_message(update: dict[str, Any]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def _extract_message(
+    update: dict[str, Any],
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """
     Вытащить chat_id, username и text из update (с защитой от отсутствующих ключей).
     :param update: элемент из массива result Telegram API

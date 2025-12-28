@@ -34,9 +34,7 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
 
 # Разрешённые хосты
-ALLOWED_HOSTS = [
-    h for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h
-]
+ALLOWED_HOSTS = [h for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h]
 
 
 # ============================================================
@@ -53,14 +51,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
     # Third-party
     "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
     "drf_spectacular",
     "drf_spectacular_sidecar",
-
     # Local apps
     "habits",
     "accounts.apps.AccountsConfig",
@@ -147,7 +143,9 @@ REST_FRAMEWORK = {
 # ============================================================
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -216,12 +214,12 @@ CELERY_BEAT_SCHEDULE = {
 # ============================================================
 
 cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
-CORS_ALLOWED_ORIGINS = [
-    x.strip() for x in cors_origins.split(",") if x.strip()
-]
+CORS_ALLOWED_ORIGINS = [x.strip() for x in cors_origins.split(",") if x.strip()]
 
-CORS_ALLOW_CREDENTIALS = (
-    os.getenv("CORS_ALLOW_CREDENTIALS", "False").lower() in ("1", "true", "yes")
+CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "False").lower() in (
+    "1",
+    "true",
+    "yes",
 )
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
@@ -249,10 +247,8 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-
     # Глобальная security-схема
     "SECURITY": [{"tokenAuth": []}],
-
     # Описание схемы авторизации
     "COMPONENTS": {
         "securitySchemes": {
