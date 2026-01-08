@@ -176,15 +176,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           TMP_ENV="$(mktemp)"
+
           # создаём локальный файл из секрета
           cat > "$TMP_ENV" <<'EOF'
-          ${{ secrets.ENV_DOCKER }}
+          ${{ secrets.ENV_DOCKER }} 
           EOF
+      
       # копируем на сервер
          rsync -avz -e "ssh -p ${{ secrets.SSH_PORT }}" \
-         "$TMP_ENV" \
-         "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/.env.docker"
+           "$TMP_ENV" \
+           "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/.env.docker"
+
          rm -f "$TMP_ENV"
 
       - name: Deploy on server (load + up + migrate)
