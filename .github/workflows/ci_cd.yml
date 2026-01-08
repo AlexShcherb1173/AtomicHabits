@@ -176,19 +176,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "cat > '${{ secrets.DEPLOY_PATH }}/.env.docker' <<'EOF'
-${{ secrets.ENV_DOCKER }}
-EOF"
+          TMP_ENV="$(mktemp)"
+          # создаём локальный файл из секрета
+          cat > "$TMP_ENV" <<'EOF'
+          ${{ secrets.ENV_DOCKER }}
+          EOF
+      # копируем на сервер
+         rsync -avz -e "ssh -p ${{ secrets.SSH_PORT }}" \
+         "$TMP_ENV" \
+         "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/.env.docker"
+         rm -f "$TMP_ENV"
 
       - name: Deploy on server (load + up + migrate)
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
-            set -euo pipefail
-            cd '${{ secrets.DEPLOY_PATH }}'
-            docker load -i '${{ env.TAR_NAME }}'
-            docker compose config >/dev/null
-            docker compose up -d --remove-orphans --pull=never --no-build
-            docker compose exec -T web python manage.py migrate --noinput
-          "
+          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<'SSH'
+          set -euo pipefail
+          cd "${DEPLOY_PATH:-/opt/atomichabits}"
+          docker load -i atomichabits_latest.tar
+          docker compose config >/dev/null
+          docker compose up -d --remove-orphans --pull=never --no-build
+          docker compose exec -T web python manage.py migrate --noinput
+          SSH
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
