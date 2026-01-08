@@ -252,6 +252,233 @@ Celery:
 ✔ Тесты покрывают бизнес-логику  
 ✔ Готов к frontend-интеграции и деплою  
 
+
+### Deploy & CI/CD (Production)
+
+Проект AtomicHabits использует GitHub Actions +   
+Docker Compose для автоматического деплоя на удалённый   
+Linux-сервер по SSH.
+
+Docker управляет контейнерами  
+
+systemd (опционально) — автозапуском  
+
+GitHub Actions — сборкой, тестами и доставкой образа на сервер  
+
+SCP + docker load — доставкой Docker-образа (без registry)  
+
+#### Требования к серверу
+
+Удалённый сервер (рекомендуется Ubuntu 20.04+):  
+
+Docker ≥ 24  
+
+Docker Compose v2  
+
+SSH-доступ по ключу  
+
+Открытые порты:  
+
+80 — nginx  
+
+443 — (если планируется HTTPS)  
+
+Пользователь с правами sudo  
+
+#### Установка Docker и Docker Compose
+sudo apt update  
+sudo apt install -y ca-certificates curl gnupg  
+curl -fsSL https://get.docker.com | sudo sh  
+sudo usermod -aG docker $USER  
+newgrp docker  
+  
+docker --version  
+docker compose version  
+
+#### Структура на сервере
+
+Проект разворачивается в каталоге:  
+  
+/opt/atomichabits  
+  
+Минимально ожидаемая структура:  
+
+/opt/atomichabits  
+├── docker-compose.yml  
+├── docker/  
+│   ├── django/  
+│   │    └── Dockerfile  
+│   │    └── entrypoint.sh  
+│   └── nginx/  
+│       └── nginx.conf  
+├── .env.docker          # ❗ хранится только на сервере  
+├── atomichabits_latest.tar  
+└── .tmp/                # временные файлы деплоя  
+  
+#### Подготовка SSH
+1. Создай SSH-ключ (локально)  
+ssh-keygen -t ed25519 -C "github-deploy-atomichabits"  
+
+По умолчанию ключ будет в:  
+
+~/.ssh/id_ed25519  
+  
+2. Добавь публичный ключ на сервер  
+ssh-copy-id user@SERVER_IP  
+  
+3. Проверь вход  
+ssh user@SERVER_IP  
+
+#### GitHub Secrets
+  
+В репозитории GitHub открой:  
+  
+Settings → Secrets and variables → Actions → New repository secret  
+  
+Добавь следующие secrets:  
+  
+Имя	-------------------------Описание  
+SSH_HOST---------------	IP или домен сервера  
+SSH_PORT---------------	Обычно 22  
+SSH_USER---------------	Пользователь на сервере  
+SSH_PRIVATE_KEY----	Приватный SSH-ключ (id_ed25519)  
+DEPLOY_PATH-----------	/opt/atomichabits  
+ENV_DOCKER	------------Полное содержимое .env.docker  
+
+Важно:
+SSH_PRIVATE_KEY добавляется целиком, включая строки:  
+
+-----BEGIN OPENSSH PRIVATE KEY-----  
+...
+-----END OPENSSH PRIVATE KEY-----  
+
+#### Конфигурация окружения (.env.docker)
+  
+Файл не хранится в git и создаётся только на сервере  
+(или передаётся через GitHub Secret ENV_DOCKER).  
+  
+nano /opt/atomichabits/.env.docker  
+
+Пример:
+
+DJANGO_SECRET_KEY=super-secret-key  
+DJANGO_DEBUG=False  
+DJANGO_ALLOWED_HOSTS=example.com,www.example.com  
+
+POSTGRES_DB=AtomicHabits_db  
+POSTGRES_USER=postgres  
+POSTGRES_PASSWORD=postgres  
+POSTGRES_HOST=db  
+POSTGRES_PORT=5432  
+  
+REDIS_HOST=redis  
+REDIS_PORT=6379  
+  
+TIME_ZONE=Europe/Amsterdam  
+LANGUAGE_CODE=ru  
+  
+TELEGRAM_BOT_TOKEN=  
+TELEGRAM_BOT_USERNAME=  
+TELEGRAM_API_URL=https://api.telegram.org  
+
+#### CI/CD Workflow (GitHub Actions)
+
+Workflow выполняет:  
+  
+Checkout кода  
+  
+Линтинг (ruff)  
+  
+Запуск тестов (pytest + coverage)  
+  
+Проверку сборки Docker-образа  
+  
+Сборку production-образа  
+  
+docker save → .tar  
+  
+SCP-копирование на сервер  
+  
+docker load  
+ 
+docker compose up -d  
+  
+Выполнение миграций  
+  
+##### Триггер workflow
+
+Workflow запускается автоматически:  
+  
+при push в ветку feature  
+  
+(при необходимости можно добавить workflow_dispatch)  
+  
+#### Деплой (как это работает)
+На GitHub Actions  
+  
+Docker-образ собирается локально  
+
+Сохраняется как atomichabits_latest.tar  
+  
+Копируется на сервер по SCP  
+  
+Загружается через docker load  
+  
+Запускается через docker compose  
+  
+Вручную на сервере (если нужно)    
+cd /opt/atomichabits  
+docker compose up -d  
+  
+#### Проверка после деплоя
+Контейнеры  
+docker compose ps  
+
+Ожидаемый статус:  
+  
+web — Up  
+  
+nginx — Up 
+  
+db — Healthy  
+  
+redis — Healthy  
+  
+celery — Up  
+  
+celery_beat — Up  
+  
+Проверка API  
+curl http://SERVER_IP/  
+
+Swagger:  
+  
+http://SERVER_IP/api/schema/swagger-ui/  
+
+#### Тесты и Celery в CI  
+  
+В CI используется режим:  
+
+CELERY_TASK_ALWAYS_EAGER=True  
+CELERY_TASK_EAGER_PROPAGATES=True  
+  
+Это позволяет:
+  
+запускать тесты без Redis  
+  
+выполнять Celery-задачи синхронно  
+  
+избежать падений pipeline  
+ 
+Важно помнить
+
+❌ .env.docker никогда не коммитится
+❌ секреты не хранятся в репозитории
+✅ деплой полностью автоматизирован
+✅ Docker-образы доставляются без registry
+✅ volumes не монтируют несуществующие файлы
+✅ проект поднимается одной командой
+
 ### 👨‍💻 Автор
 Проект разработан как production-ready backend  
 с упором на чистую архитектуру, тестируемость и масштабируемость.  
