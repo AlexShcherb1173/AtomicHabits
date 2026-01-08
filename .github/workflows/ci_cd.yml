@@ -158,8 +158,11 @@ jobs:
 
       - name: Upload compose + nginx + tar
         shell: bash
+        env:
+          TAR_NAME: ${{ env.TAR_NAME }}
         run: |
           set -euo pipefail
+
           rsync -avz -e "ssh -p ${{ secrets.SSH_PORT }}" \
             docker-compose.yml \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/docker-compose.yml"
@@ -169,39 +172,36 @@ jobs:
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/docker/nginx/nginx.conf"
 
           rsync -avz -e "ssh -p ${{ secrets.SSH_PORT }}" \
-            ${{ env.TAR_NAME }} \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/${{ env.TAR_NAME }}"
+            "$TAR_NAME" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/$TAR_NAME"
 
       - name: Upload .env.docker from secret
         shell: bash
+        env:
+          ENV_DOCKER: ${{ secrets.ENV_DOCKER }}
         run: |
           set -euo pipefail
-
           TMP_ENV="$(mktemp)"
+          printf "%s" "$ENV_DOCKER" > "$TMP_ENV"
 
-          # создаём локальный файл из секрета
-          cat > "$TMP_ENV" <<'EOF'
-          ${{ secrets.ENV_DOCKER }} 
-          EOF
-      
-      # копируем на сервер
-         rsync -avz -e "ssh -p ${{ secrets.SSH_PORT }}" \
-           "$TMP_ENV" \
-           "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/.env.docker"
+          rsync -avz -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            "$TMP_ENV" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/.env.docker"
 
-         rm -f "$TMP_ENV"
+          rm -f "$TMP_ENV"
 
       - name: Deploy on server (load + up + migrate)
         shell: bash
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TAR_NAME: ${{ env.TAR_NAME }}
         run: |
           set -euo pipefail
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<'SSH'
+          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<SSH
           set -euo pipefail
-          cd "${DEPLOY_PATH:-/opt/atomichabits}"
-          docker load -i atomichabits_latest.tar
+          cd "$DEPLOY_PATH"
+          docker load -i "$TAR_NAME"
           docker compose config >/dev/null
           docker compose up -d --remove-orphans --pull=never --no-build
           docker compose exec -T web python manage.py migrate --noinput
           SSH
-        env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
