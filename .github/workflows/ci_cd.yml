@@ -226,6 +226,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker load -i "$TAR_NAME"
+          rm -f "$TAR_NAME"
           docker compose --env-file .env.docker config >/dev/null
           docker compose --env-file .env.docker up -d --remove-orphans --pull=never --no-build
           docker compose --env-file .env.docker exec -T web python manage.py migrate --noinput
