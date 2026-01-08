@@ -465,9 +465,7 @@ CELERY_TASK_EAGER_PROPAGATES=True
 Это позволяет:
   
 запускать тесты без Redis  
-  
 выполнять Celery-задачи синхронно  
-  
 избежать падений pipeline  
  
 Важно помнить
