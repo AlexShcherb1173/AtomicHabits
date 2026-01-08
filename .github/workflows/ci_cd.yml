@@ -65,10 +65,10 @@ jobs:
       POSTGRES_DB: AtomicHabits_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: "5432"
 
-      REDIS_HOST: redis
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: "6379"
 
       TELEGRAM_BOT_TOKEN: ""
@@ -97,6 +97,27 @@ jobs:
           pip install -r requirements.txt
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
           pip install pytest pytest-cov
+
+      - name: Install postgres client (pg_isready)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..30}; do
+            pg_isready -h 127.0.0.1 -p 5432 -U postgres -d AtomicHabits_db && exit 0
+            sleep 1
+          done
+          echo "Postgres not ready" >&2
+          exit 1
+
+      - name: Wait for Redis
+        run: |
+          for i in {1..30}; do
+            (echo PING | nc 127.0.0.1 6379) | grep -q PONG && exit 0
+            sleep 1
+          done
+          echo "Redis not ready" >&2
+          exit 1
 
       - name: Migrate (CI)
         run: |
@@ -133,6 +154,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
       - name: Build Docker image
         run: |
           docker build -f docker/django/Dockerfile -t ${{ env.IMAGE_TAG }} .
@@ -148,6 +172,7 @@ jobs:
           install -m 700 -d ~/.ssh
           printf "%s" "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -R "${{ secrets.SSH_HOST }}" || true
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Ensure deploy directory exists
@@ -201,7 +226,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker load -i "$TAR_NAME"
-          docker compose config >/dev/null
-          docker compose up -d --remove-orphans --pull=never --no-build
-          docker compose exec -T web python manage.py migrate --noinput
+          docker compose --env-file .env.docker config >/dev/null
+          docker compose --env-file .env.docker up -d --remove-orphans --pull=never --no-build
+          docker compose --env-file .env.docker exec -T web python manage.py migrate --noinput
           SSH
