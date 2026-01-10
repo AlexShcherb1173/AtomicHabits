@@ -17,24 +17,38 @@ from dotenv import load_dotenv
 from celery.schedules import crontab
 from corsheaders.defaults import default_headers
 
-# Загружаем переменные окружения из .env
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    """
+    Читает bool из env.
+    True: 1, true, yes, on
+    False: 0, false, no, off
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name: str, default: str = "") -> list[str]:
+    """
+    Читает список из env: значения через запятую.
+    """
+    raw = os.getenv(name, default)
+    return [x.strip() for x in raw.split(",") if x.strip()]
 
 
 # ============================================================
 # SECURITY
 # ============================================================
 
-# Секретный ключ Django (обязательно переопределить в production)
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-change-me")
-
-# Режим отладки
-DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
-
-# Разрешённые хосты
-ALLOWED_HOSTS = [h for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h]
+DEBUG = env_bool("DJANGO_DEBUG", default=True)
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
 
 
 # ============================================================
@@ -44,20 +58,17 @@ ALLOWED_HOSTS = [h for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 INSTALLED_APPS = [
-    # Django core
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Third-party
     "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
     "drf_spectacular",
     "drf_spectacular_sidecar",
-    # Local apps
     "habits",
     "accounts.apps.AccountsConfig",
     "notifications",
@@ -70,7 +81,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",  # CORS должен быть как можно выше
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -125,15 +136,12 @@ DATABASES = {
 # ============================================================
 
 REST_FRAMEWORK = {
-    # По умолчанию — TokenAuth
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
     ],
-    # По умолчанию — доступ только авторизованным
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    # OpenAPI schema generator
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
@@ -143,9 +151,7 @@ REST_FRAMEWORK = {
 # ============================================================
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
-    },
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -156,8 +162,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # INTERNATIONALIZATION
 # ============================================================
 
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+LANGUAGE_CODE = os.getenv("LANGUAGE_CODE", "ru")
+TIME_ZONE = os.getenv("TIME_ZONE", "Europe/Amsterdam")
 USE_I18N = True
 USE_TZ = True
 
@@ -166,17 +172,20 @@ USE_TZ = True
 # STATIC FILES
 # ============================================================
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # ============================================================
-# EMAIL (⚠️ см. замечание ниже)
+# EMAIL
 # ============================================================
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_BACKEND = os.getenv(
+    "SMTP_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+)
 EMAIL_HOST = os.getenv("SMTP_HOST", "smtp.example.com")
 EMAIL_PORT = int(os.getenv("SMTP_PORT", "587"))
-EMAIL_USE_TLS = os.getenv("SMTP_USE_TLS", "True") == "True"
+EMAIL_USE_TLS = env_bool("SMTP_USE_TLS", default=True)
 EMAIL_HOST_USER = os.getenv("SMTP_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
@@ -196,11 +205,14 @@ TELEGRAM_API_URL = os.getenv("TELEGRAM_API_URL", "https://api.telegram.org")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = os.getenv("REDIS_PORT", "6379")
-CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
-CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/0")
+CELERY_RESULT_BACKEND = os.getenv(
+    "CELERY_RESULT_BACKEND", f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
+)
+
 CELERY_ENABLE_UTC = False
 
-# Периодические задачи
 CELERY_BEAT_SCHEDULE = {
     "send-habit-reminders-every-minute": {
         "task": "habits.tasks.send_habit_reminders",
@@ -213,22 +225,12 @@ CELERY_BEAT_SCHEDULE = {
 # CORS / CSRF
 # ============================================================
 
-cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
-CORS_ALLOWED_ORIGINS = [x.strip() for x in cors_origins.split(",") if x.strip()]
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "")
+CORS_ALLOW_CREDENTIALS = env_bool("CORS_ALLOW_CREDENTIALS", default=False)
 
-CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "False").lower() in (
-    "1",
-    "true",
-    "yes",
-)
+CORS_ALLOW_HEADERS = list(default_headers) + ["authorization"]
 
-CORS_ALLOW_HEADERS = list(default_headers) + [
-    "authorization",
-]
-
-CSRF_TRUSTED_ORIGINS = [
-    "https://frontend.example.com",
-]
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "")
 
 
 # ============================================================
@@ -247,9 +249,7 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    # Глобальная security-схема
     "SECURITY": [{"tokenAuth": []}],
-    # Описание схемы авторизации
     "COMPONENTS": {
         "securitySchemes": {
             "tokenAuth": {
